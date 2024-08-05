@@ -1,39 +1,44 @@
 pipeline {
     agent any
-
     environment {
-        DOCKER_IMAGE = 'engineer442/nodejs-helloworld:latest'
-        KUBE_NAMESPACE = 'default' // Adjust as needed
+        DOCKER_IMAGE = "nodejs-app"
     }
-
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
-
-        stage('Deploy to Kubernetes') {
+        stage('Build') {
             steps {
                 script {
-                    kubernetesDeploy(
-                        configs: 'node-app-with-service.yaml',
-                        kubeconfigId: 'kubeconfig-credentials'
-                    )
+                    dockerImage = docker.build("${env.DOCKER_IMAGE}:${env.BUILD_ID}")
                 }
             }
         }
-    }
-
-    post {
-        success {
-            echo 'Pipeline succeeded!'
+        stage('Test') {
+            steps {
+                script {
+                    dockerImage.inside {
+                         // Set execute permissions for node_modules/.bin
+                        sh 'chmod +x node_modules/.bin/mocha'
+                        sh 'npm test'
+                    }
+                }
+            }
         }
-        failure {
-            echo 'Pipeline failed.'
-        }
-        always {
-            echo 'Pipeline finished.'
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                  
+                      kubeconfig(credentialsId: 'kubeconfig-id', serverUrl: 'https://0.0.0.0:45685') {
+                        sh 'kubectl apply -f kubernetes-deployment.yml'
+                    }
+                    
+              
+                    
+                }
+            }
         }
     }
 }
